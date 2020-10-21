@@ -1,0 +1,364 @@
+---
+title: "Modeling and Forecasting"
+author: ""
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,error=F,warnng=F)
+options(repr.plot.width=14, repr.plot.antialias='subpixel',
+        repr.plot.res=218)
+```
+
+# Linear Regression Model
+
+The linear regression model
+$$Y = \beta_0 + \beta_1X_1 +\cdots+\beta_kX_k+e$$
+is commonly used to describe the relationship between a response Y and a set of variables X1,X2,.,Xk.
+
+The MASS library contains the Boston data set, which records medv (median house value) for 506 neighborhoods around Boston. We will seek to predict medv using 13 predictors such as rm (average number of rooms per house), age (average age of houses), and lstat (percent of households with low socioeconomic status).
+
+```{r}
+library("MASS")
+data("Boston")
+```
+
+## Simple Linear Regression
+
+```{r}
+lm.fit <- lm(medv~lstat, data = Boston)
+summary(lm.fit)
+```
+
+```{r}
+par(mfrow =c(2, 2))
+plot(lm.fit)
+```
+
+### Residuals vs Fitted
+This plot shows if residuals have non-linear patterns. There could be a non-linear relationship between predictor variables and an outcome variable and the pattern could show up in this plot if the model doesn't capture the non-linear relationship. If you find equally spread residuals around a horizontal line without distinct patterns, that is a good indication you don't have non-linear relationships.
+
+### Normal Q-Q
+
+This plot shows if residuals are normally distributed. It's good if residuals are lined well on the straight dashed line.
+
+### Scale-Location
+
+It's also called Spread-Location plot. This plot shows if residuals are spread equally along the ranges of predictors. This is how you can check the assumption of equal variance (homoscedasticity). It's good if you see a horizontal line with equally (randomly) spread points.
+
+### Residuals vs Leverage
+
+Unlike the other plots, this time patterns are not relevant. We watch out for outlying values at the upper right corner or at the lower right corner. Those spots are the places where cases can be influential against a regression line. Look for cases outside of a dashed line, Cook's distance. When cases are outside of the Cook's distance (meaning they have high Cook's distance scores), the cases are influential to the regression results. The regression results will be altered if we exclude those cases.
+
+## Multiple Linear Regression
+We can include all regressor in the dataset by using the following short-hand:
+
+```{r}
+lm.fit <- lm(medv ~ ., data = Boston)
+summary(lm.fit)
+```
+
+
+What if we would like to perform a regression using all of the variables but one? For example, in the above regression output, age has a high p-value. So we may wish to run a regression excluding this predictor. The following syntax results in a regression using all predictors except age.
+
+```{r}
+lm.fit <- lm(medv ~ . -age, data = Boston)
+summary(lm.fit)
+```
+
+Of course, you can exclude more regressors by doing the following:
+
+```{r}
+lm.fit <- lm(medv ~ . -age - indus, data = Boston)
+summary(lm.fit)
+```
+
+## Interaction Terms
+
+It is easy to include interaction terms in a linear model using the lm() function. The syntax lstat*age simultaneously includes lstat, age, and the interaction term lstat -age as predictors; it is a shorthand for lstat+age+lstat:age.
+
+```{r}
+lm.fit <- lm(medv ~ lstat * age, data = Boston)
+summary(lm.fit)
+```
+
+## Non-linear Transformations of the Predictors
+
+The lm() function can also accommodate non-linear transformations of the predictors. For instance, given a predictor X, we can create a predictor X2 using I(X^2).
+
+```{r}
+lm.fit2 <- lm(medv ~ lstat + I(lstat^2), data = Boston)
+summary(lm.fit2)
+```
+
+We use the anova() function to further quantify the extent to which the quadratic fit is superior to the linear fit.
+
+```{r}
+lm.fit <- lm(medv ~ lstat, data = Boston)
+anova(lm.fit, lm.fit2)
+```
+
+Here Model 1 represents the linear submodel containing only one predictor, lstat, while Model 2 corresponds to the larger quadratic model that has two predictors, lstat and lstat2.
+
+The anova() function performs a hypothesis test comparing the two models. The null hypothesis is that the two models fit the data equally well, and the alternative hypothesis is that the full model is superior. Here the F-statistic is 135 and the associated p-value is virtually zero. This provides very clear evidence that the model containing the predictors lstat and lstat2 is far superior to the model that only contains the predictor lstat.
+
+```{r}
+par(mfrow = c(2, 2))
+plot(lm.fit2)
+```
+
+We can add higher order polynomial regressors by using the poly() function within lm(). For example, the following command produces a fifth-order polynomial fit:
+
+```{r}
+lm.fit5 <- lm(medv~poly(lstat,5), data = Boston)
+summary(lm.fit5)
+```
+
+## Prediction using linear model
+
+```{r}
+train <- sample(c(1:506), 400, replace = FALSE)
+train.set <- Boston[train,]
+test.set <- Boston[-train,]
+
+lm.fit <- lm(medv ~ lstat, data = train.set)
+lm.pred <- predict(lm.fit, test.set)
+
+library(ggplot2)
+ggplot(test.set, aes(x = lstat, y = medv)) +
+  geom_smooth(method = "lm", se = FALSE, color = "lightgrey") +  # Plot regression slope
+  geom_segment(aes(xend = lstat, yend = lm.pred), alpha = .2) +  # alpha to fade lines
+  geom_point() +
+  geom_point(aes(y = lm.pred), shape = 1) +
+  theme_bw()  # Add theme for cleaner look
+```
+
+## Cross-Validation
+
+### Leave-One-Out Cross-Validation (LOOCV)
+
+LOOCV splitting the set of observations into two parts. The validation set contains a single observation (x1,y1), and the remaining observations {(x2,y2),.,(xn,yn)} make up the training set. The statistical learning method is fit on the n - 1 training observations, and a prediction $\hat{y}$ is made for the excluded observation, using its value x1. Since (x1,y1) was not used in the fitting process, $MSE_1 =(y_1 - \hat{y}_1)^2$ provides an approximately unbiased estimate for the test error. Repeating this approach n times produces n squared errors, MSE1,.,MSEn. The LOOCV estimate for the test MSE is the average of these n test error estimates:
+
+$$\begin{align*}
+CV_{(n)}=\frac{1}{n}\sum^n_{i=1}MSE_i
+\end{align*}$$
+
+The LOOCV estimate can be automatically computed for any generalized linear model using the glm() and cv.glm() functions. The cv.glm() function is part of the boot library.
+
+We used the glm() function to perform logistic regression by passing in the family = "binomial" argument. But if we use glm() to fit a model without passing in the family argument, then it performs linear regression, just like the lm() function. So for instance,
+
+```{r}
+library("MASS")
+data("Boston")
+glm.fit <- glm(medv ~ lstat, data = Boston)
+coef(glm.fit)
+```
+
+```{r}
+lm.fit <- lm(medv ~ lstat, data = Boston)
+coef(lm.fit)
+```
+
+In this Chapter, we will perform linear regression using the glm() function rather than the lm() function because the latter can be used together with cv.glm().
+
+```{r}
+library("boot")
+glm.fit <- glm(medv ~ lstat, data = Boston)
+cv.err <- cv.glm(Boston, glm.fit)
+cv.err$delta
+```
+
+The first component of delta is the raw cross-validation estimate of prediction error. The second component of delta is the adjusted cross-validation estimate. The adjustment is designed to compensate for the bias introduced by not using leave-one-out cross-validation.
+
+We can repeat this procedure for increasingly complex polynomial fits.
+
+```{r}
+cv.error <- c()
+for(i in 1:8){
+  glm.fit <- glm(medv ~ poly(lstat, i), data = Boston)
+  cv <- cv.glm(Boston, glm.fit)
+  cv.error[i] <- cv$delta[1]
+}
+cv.error
+```
+
+### k-Fold Cross-Validation
+
+An alternative to LOOCV is k-fold CV. This approach involves randomly k-fold CV dividing the set of observations into k groups, or folds, of approximately equal size. The first fold is treated as a validation set, and the method is fit on the remaining k - 1 folds. The mean squared error, MSE1, is then computed on the observations in the held-out fold. This procedure is repeated k times; each time, a different group of observations is treated as a validation set. This process results in k estimates of the test error, MSE1,MSE2,.,MSEk. The k-fold CV estimate is computed by averaging these values,
+
+$$\begin{align*}
+CV_{(k)}=\frac{1}{k}\sum^k_{i=1}MSE_i
+\end{align*}$$
+It is not hard to see that LOOCV is a special case of k-fold CV in which k is set to equal n. In practice, one typically performs k-fold CV using k=5 or k=10.
+
+The cv.glm() function can also be used to implement k-fold CV. Below we use k=10, a common choice for k, on the Boston data set. We once again set a random seed and initialize a vector in which we will store the CV errors corresponding to the polynomial fits of orders one to ten.
+
+```{r}
+set.seed (2312)
+
+cv.error <- c()
+for(i in 1:10){
+  glm.fit <- glm(medv ~ poly(lstat, i), data = Boston)
+  cv <- cv.glm(Boston, glm.fit, K= 10)
+  cv.error[i] <- cv$delta[1]
+}
+cv.error
+```
+
+Note that there is a bias-variance trade-off associated with the choice of k in k-fold cross-validation. Typically, given these considerations, one performs k-fold cross-validation using k = 5 or k = 10, as these values have been shown empirically to yield test error rate estimates that suffer neither from excessively high bias nor from very high variance.
+
+
+## Linear model Selection
+
+### Best Subset Selection
+
+To perform best subset selection, we fit a separate least squares regression for each possible combination of the p predictors. We then look at all of the resulting models, with the goal of identifying the one that is best.
+
+Algorithm: Best subset Selection
+
+  1.  Let $M_0$ denote the null model, which contains no predictors. This model simply predicts the sample mean for each observation.
+ 
+  2.  For k=1,2,...,p: 
+    (a) Fit all $\left(\begin{array}{c}p\k \end{array}\right)=p(p-1)/2$ models that contain exactly k predictors. 
+    
+    (b) Pick the best among these ($p\k$) models, and call it $M_k$. Here best is defined as having the smallest RSS, or equivalently largest $R^2$.
+    
+  3.  Select a single best model from among $M_0,\dots,M_p$ using cross-validated prediction error, AIC, BIC, or adjusted $R^2$.
+
+In the Algorithm above, Step 2 identifies the best model (on the training data) for each subset size, in order to reduce the problem from one of 2p possible models to one of p+1 possible models.
+
+Note that the RSS of these p + 1 models decreases monotonically, and the $R^2$ increases monotonically, as the number of features included in the models increases. Therefore, if we use these statistics to select the best model, then we will always end up with a model involving all of the variables. The problem is that a low RSS or a high $R^2$ indicates a model with a low training error, whereas we wish to choose a model that has a low test error. Therefore, in Step 3, we use cross-validated prediction error, AIC, BIC, or adjusted $R^2$ in order to select among $M_0,M_1,\dots,M_p$.
+
+Here we briefly introduce some popular criterion for model selection: The AIC criterion is defined for a large class of models fit by maximum likelihood. It is given by:
+
+$$AIC=\frac{1}{n\hat{\sigma}^2}(RSS+2k\hat{\sigma}^2)$$
+
+where $\hat{\sigma}^2$ is an estimate of the variance of the error term, k is the number of regressors.
+
+BIC is derived from a Bayesian point of view, but ends up looking similar to AIC as well. For the least squares model with p predictors, the BIC is, up to irrelevant constants, given by
+$$BIC=\frac{1}{n\hat{\sigma}^2}(RSS+\log(n)k\hat{\sigma}^2)$$
+The BIC will tend to take on a small value for a model with a low test error, and so generally we select the model that has the lowest BIC value. Note that the theory behind AIC and BIC are much involved and are beyond the scope of this course.
+
+The adjusted $R^2$ statistic is another popular approach for selecting among a set of models that contain different numbers of variables. For a least squares model with d variables, the adjusted R2 statistic is calculated as
+$$\text{Adjusted } R^2=1-\frac{RSS/(n-k-1)}{TSS/(n-1)}$$
+
+Unlike, AIC, and BIC, for which a small value indicates a model with a low test error, a large value of adjusted R2 indicates a model with a small test error.
+
+Now let's talk about the implementation of Best Subset Selection by application of Hitters data. We wish to predict a baseball player's Salary on the basis of various statistics associated with performance in the previous year.
+
+```{r}
+library (ISLR )
+data(Hitters)
+names(Hitters)
+# remove the missing values in the data
+Hitters <- na.omit(Hitters)
+```
+
+The regsubsets() function (part of the leaps library) performs best subset selection by identifying the best model that contains a given number of predictors, where best is quantified using RSS.
+
+```{r}
+library(leaps)
+regfit.full <- regsubsets(Salary ~ ., Hitters, nvmax = 8)
+reg.summary <- summary(regfit.full)
+reg.summary
+```
+
+The *summary()* function also returns $R^2$, RSS, adjusted R2, and BIC. We can examine these to try to select the best overall model. Plotting RSS, adjusted R2, and BIC for all of the models at once will help us decide which model to select. Note the *type="l"* option tells R to connect the plotted points with lines.
+
+```{r}
+egfit.full <- regsubsets(Salary ~ ., Hitters, nvmax = 18)
+reg.summary <- summary(regfit.full)
+
+par(mfrow=c(1, 2))
+plot(reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+plot(reg.summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type ="l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)],
+        col = "red", cex = 2, pch = 20)
+```
+
+The *regsubsets()* function has a built-in *plot()* command which can be used to display the selected variables for the best model with a given number of predictors, ranked according to the BIC, Cp, adjusted $R^2$, or AIC. To find out more about this function, type *?plot.regsubsets*.
+
+```{r}
+#plot(regfit.full, scale ="adjr2")
+#plot(regfit.full, scale ="r2")
+plot(regfit.full, scale ="bic")
+```
+
+We see that several models share a BIC close to -150. However, the model with the lowest BIC is the six variable model that contains only AtBat, Hits, Walks, CRBI, DivisionW, and PutOuts. We can use the *coef()* function to see the coefficient estimates associated with this model.
+
+```{r}
+coef(regfit.full, 6)
+```
+
+### Stepwise Selection
+Best subset selection may also suffer from statistical problems when p is large. The larger the search space, the higher the chance of finding models that look good on the training data, even though they might not have any predictive power on future data. For both of these reasons, stepwise methods, which explore a far more restricted set of models, are attractive alternatives to best subset selection.
+
+#### Forward Stepwise Selection
+
+Algorithm: Forward stepwise selection
+
+1.  Let $M_0$ denote the null model, which contains no predictors.
+2.  For $k=0,1,\dots,p-1$: (a) Consider all p-k models that augment the predictors in $M_k$ with one additional predictor. (b) Choose the best among these p-k models, and call it $M_{k+1}$. Here best is defined as having smallest RSS or highest $R^2$.
+3.  Select a single best model from among $M_0,\dots,M_{*p*}$ using cross-validated prediction error, AIC, BIC, or adjusted $*R2^$.
+
+Unlike best subset selection, which involved fitting $2^p$ models, forward stepwise selection involves fitting one null model, along with p-k models in the kth iteration, for $k=0,1,\dots,p-1$ . This amounts to a total of $1 + \sum^{p-1}_{k=0}= 1+p(p+1)/2$ models. This is a substantial difference: when p = 20, best subset selection requires fitting 1,048,576 models, whereas forward stepwise selection requires fitting only 211 models.
+
+Forward stepwise selection's computational advantage over best subset selection is clear. Though forward stepwise tends to do well in practice, it is not guaranteed to find the best possible model out of all $2^p$ models containing subsets of the p predictors.
+
+#### Backward Stepwise Selection
+
+Unlike forward stepwise selection, it begins with the full least squares model containing all p predictors, and then iteratively removes the least useful predictor, one-at-a-time.
+
+Algorithm: Backward stepwise selection
+
+  1.  Let $M_p$ denote the full model, which contains all p predictors.
+  
+  2.  For $k=p,p-1,\dots,1$: (a) Consider all k models that contain all but one of the predictors in $M_k$ with one additional predictor. (b) Choose the best among these k models, and call it $M_{k-1}$. Here best is defined as having smallest RSS or highest $R^2$.
+  
+  3.  Select a single best model from among $M_0,\dots,M_{*p*}$ using cross-validated prediction error, AIC, BIC, or adjusted $*R2^$.
+
+Like forward stepwise selection, the backward selection approach searches through only 1+p(p+1)/2 models, and so can be applied in settings where p is too large to apply best subset selection. Also like forward stepwise selection, backward stepwise selection is not guaranteed to yield the best model containing a subset of the p predictors.
+
+We can also use the *regsubsets()* function to perform forward stepwise or backward stepwise selection, using the argument *method="forward"* or *method="backward"*.
+
+```{r}
+library(ISLR)
+library(leaps)
+
+# Forward Stepwise Selection
+data(Hitters)
+regfit.fwd <- regsubsets(Salary ~ ., Hitters, nvmax = 19,
+                      force.in = c("Hits", "Runs"), method = "forward")
+summary(regfit.fwd)
+
+# Backward Stepwise Selection
+# regfit.bwd <- regsubsets(Salary ~ ., Hitters, nvmax = 19, method = "backward")
+# summary(regfit.bwd)
+```
+
+
+```{r}
+#plot(regfit.full, scale ="adjr2")
+#plot(regfit.full, scale ="r2")
+plot(regfit.fwd, scale ="bic")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

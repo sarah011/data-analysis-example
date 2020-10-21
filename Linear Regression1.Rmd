@@ -1,0 +1,395 @@
+---
+title: "Modeling and Forecasting"
+author: ""
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,error=F,warnng=F)
+options(repr.plot.width=14, repr.plot.antialias='subpixel',
+        repr.plot.res=218)
+```
+
+# Linear Regression Model
+
+Linear regression attempts to model the relationship between two variables by fitting a linear equation to observed data. The linear model has the form of
+  $Y= \beta_0 + \beta_1x_1 + \beta_2x_2 + \cdots+\beta_kx_k + e$
+  
+where $Y=(y_1,y_2,\dots,y_N)$ is the dependent variable, and $x_1,x_2,\dots,x_k$ are explanatory variables, also called regressors. The matrix form of the linear model is
+  $$Y=X\beta + e$$
+  where
+$$ Y = \left(\begin{array}{c}
+y_1\\
+y_2\\
+\dots\\
+y_N
+\end{array}\right)
+\hspace{1cm}\text{and}\hspace{1cm}
+X\beta + e = \left(\begin{array}{ccccc}
+1 & x_{11} & x_{21} &\dots& x_{k1}\\
+1 & x_{12} & x_{22} &\dots& x_{k2}\\
+\dots& \dots &\dots& \dots & \dots\\
+1 & x_{1N} & x_{2N} &\dots& x_{kN}
+\end{array}\right)
+\left(\begin{array}{c}
+\beta_0\\
+\beta_1\\
+\beta_2\\
+\dots\\
+\beta_k
+\end{array}\right)
++
+\left(\begin{array}{c}
+e_1\\
+e_2\\
+\dots\\
+e_N
+\end{array}\right) $$
+
+Recall that, the Ordinary Least Square (OLS) is to find some values of $\beta$ that minimize the sum of squared residuals (SSR).
+
+## Linear regression with one regressor
+Let's start with a single regressor
+```{r}
+# let the sample size be 1000
+# let x1 be student-teacher ratio (STR)
+# let Y be test score
+# let the true relation between test score and student-teacher ratio be linear and the impact of STR on test # score are 0.85
+N <- 1000
+X1 <- rnorm(N, 80, 5)
+error <- rnorm(N, 0, 5)
+Y <- 50 + 0.85*X1 + error
+mydata <- data.frame(Score=Y, STR=X1)
+
+library("ggplot2")
+ggplot(mydata) +
+   geom_point(aes(x=STR, y=Score)) +
+      labs(title = "A good title", x = "Student-teacher ratio", y = "Test score")+
+  theme_bw()
+```
+
+In this example, we know the true relation between STR and Score is linear and the true values of $\beta_0$ and $\beta_1$ are 50 and 0.85 respectively. why? But let's pretend that we don't know the true relation between STR and Score and true values of 0 and 1, we can only observe the data of Score and STR. Then we shall we do?
+
+We assume the relation between STR and Score is linear and we estimate the values of $\beta_0$ and $\beta_1$ using OLS.
+
+## OLS regression in R
+
+```{r}
+res <- lm(Score ~ STR, data = mydata, na.action = na.omit)
+summary(res)
+```
+
+## OLS estimator
+Recall the formula of the OLS estimators of the slope $\beta_0$ and $\beta_1$ we derived are
+
+$$\begin{align*}
+\hat{\beta}_1 &= \frac{\sum^N_{i=1}(X_i-\bar{X})(Y_i-\bar{Y})}{\sum^N_{i=1}(X_i-\bar{X})^2}
+\end{align*} $$
+
+
+\begin{align*}
+\hat{\beta}_0 &= \bar{Y}- \hat{\beta}_1\bar{X}
+\end{align*} 
+
+The formula of the standard error of $\beta_1$ and $\beta_0$ are respectively
+$$\begin{align*}
+s_{\hat{\beta}_1}=\sqrt{\frac{\frac{1}{N-2}\sum^N_{i=1}\hat{e}^2_i}{\sum^N_{i=1}(X_i-\bar{X})^2}},
+\end{align*}$$
+
+$$\begin{align*}
+s_{\hat{\beta}_0}=s_{\hat{\beta}_1}\cdot\sqrt{\frac{1}{N}\sum^N_{i=1}X_i^2},
+\end{align*}$$
+
+where $\hat{e}=Y-beta0-beta_1X$
+
+```{r}
+# Plug our data into fomula
+# estimate beta1
+b1.num <- sum((X1-mean(X1))*(Y-mean(Y)))
+b1.den <- sum((X1-mean(X1))^2)
+b1 <- b1.num/b1.den
+
+# estimate beta0
+b0 <- mean(Y) - b1*mean(X1)
+
+cat("The OLS estimator of beta0 and beta1 are", b0, "and", b1, "respectively. \n")
+```
+
+### Standard error of OLS estimator
+
+```{r}
+# estimated error term
+e_hat <- Y-b0-b1*X1
+
+# s.e. of b1
+b1.se <- sqrt(1/(N-2)*sum(e_hat^2)/sum((X1-mean(X1))^2))
+
+# s.e. of b0
+b0.se <- b1.se*sqrt(mean(X1^2))
+
+cat("The standard error of beta0 and beta1 are", b0.se, "and", b1.se, "respectively. \n")
+```
+
+### t-value
+
+$$t=\frac{\hat{\beta}-\beta}{s_{\hat{\beta}}}$$
+
+```{r}
+# t-value of b1
+b1.t <- b1/b1.se
+
+# t-value of b0
+b0.t <- b0/b0.se
+
+cat("The t-value of beta0 and beta1 are", b0.t, "and", b1.t, "respectively. \n")
+```
+
+### p-value
+
+Assuming that the distribution of the test statistic under $H_0$ is symmetric about 0, a two-sided test is specified by
+
+$$p_{value}=2 * P(x > |t_{value}| \quad| \beta=0) = 2(1 - cdf(|t_{value}|))$$
+
+```{r}
+# p-value of b1
+b1.p <- 2*pt(b1.t, df=2, ncp = N)
+
+# p-value of b0
+b0.p <- 2*pt(b0.t, df=2, ncp = N)
+
+cat("The p-value of beta0 and beta1 are", b0.p, "and", b1.p, "respectively. \n")
+```
+
+## Interpretation of the results from OLS regression
+
+### Coefficients
+
+In regression with a single independent variable, the coefficient tells you how much the dependent variable is expected to increase (if the coefficient is positive) or decrease (if the coefficient is negative) when that independent variable increases by one. In regression with multiple independent variables, the coefficient tells you how much the dependent variable is expected to increase when that independent variable increases by one, holding all the other independent variables constant. Remember to keep in mind the units which your variables are measured in.
+
+### Standard error
+
+The standard error is an estimate of the standard deviation of the coefficient. It can be thought of as a measure of the precision with which the regression coefficient is measured.
+
+### t-value
+
+The t statistic is the coefficient divided by its standard error. It t statistic is greater than the critical value given the significance level. You reject the Null hypothesis ($H_0: \beta=0$).
+
+### P-value
+
+If 95% of the t distribution is closer to the mean than the t-value on the coefficient you are looking at, then you have a P value of 5%. With a P value of 5% (or .05) there is only a 5% chance that results you are seeing would have come up in a random distribution, so you can say with a 95% probability of being correct that the variable is having some effect, assuming your model is specified correctly.
+
+### R-Squared and overall significance of the regression
+The R-squared of the regression is the fraction of the variation in your dependent variable that is accounted for (or predicted by) your independent variables.
+$$R^2 = \frac{ESS}{TSS}=\frac{\sum^N_{i=1}(\hat{Y}_i-\bar{Y})^2}{\sum^N_{i=1}(Y_i-\bar{Y})^2}$$
+
+R-squared is always between 0 and 100%:
+
+> 0% indicates that the model explains none of the variability of the response data around its mean.
+
+>  100% indicates that the model explains all the variability of the response data around its mean.
+
+In general, the higher the R-squared, the better the model fits your data. However, $R^2$ is always increasing with increases in the number of regressors in the model even if the regressor has not correlation with the dependent variable.
+
+Adjusted R-squared
+
+$$R^2_{adj}=1-(1-R^2)\frac{n-1}{n-p-1}$$
+The adjusted R-squared compensates for the addition of variables and only increases if the new predictor enhances the model above what would be obtained by probability. Conversely, it will decrease when a predictor improves the model less than what is predicted by chance.
+
+#### Interpreting the $R^2$ and the Adjusted $R^2$ in practice.
+
+There are four potential pitfalls to guard against when using the $R^2$ or $R_{adj}^2$:
+
+  - An increase in the $R^2$ or $R_{adj}^2$ does not necessarily mean that an added variable is statistically significant.
+
+  - A high $R^2$ or $R_{adj}^2$ does not mean that the regressors are a true cause of the dependent variable.
+  
+  - A high $R^2$ or $R_{adj}^2$ does not mean that there is no omitted variable bias.
+  
+  - A high $R^2$ or $R_{adj}^2$ does not necessarily mean that you have the most appropriate set of regressors, nor does a low $R^2$ or $R_{adj}^2$ necessarily mean that you have an inappropriate set of regressors.
+
+Another number to be aware of is the P value for the regression as a whole. Because your independent variables may be correlated, a condition known as multicollinearity, the coefficients on individual variables may be insignificant when the regression as a whole is significant. Intuitively, this is because highly correlated independent variables are explaining the same part of the variation in the dependent variable, so their explanatory power and the significance of their coefficients is "divided up"" between them.
+
+## Linear regression with multiple regressors
+
+```{r}
+# let the sample size be 1000
+# let x1 be student-teacher ratio (STR)
+# let x2 be age
+# let x3 be gender
+# let x4 be GDP
+# let Y be test score
+# let the true relation between test score and student-teacher ratio be linear and the impact of STR, Age
+# Gender, and GDP on test score are 0.85, 1.1, 0.2, and 0, respectively.
+N <- 100
+X1 <- rnorm(N, 80, 5)
+X2 <- sample(c(13:21), N, replace = TRUE)
+X3 <- sample(c(0,1), N, replace = TRUE)
+X4 <- rnorm(rnorm(N, 0, 10))
+error <- rnorm(N, 0, 5)
+Y <- 50 + 0.85*X1 + 1.1*X2 + 5*X3 + error
+
+mydata <- data.frame(Score=Y, STR=X1, Age=X2, Gender=X3, GDP=X4)
+mydata$Gender <- factor(mydata$Gender, levels = c(0,1), labels = c("M", "F"))
+
+head(mydata,5)
+```
+
+```{r}
+res <- lm(Score ~ STR + Age + Gender + GDP, data = mydata, na.action = na.omit)
+summary(res)
+```
+
+### OLS estimator
+We have shown in class that the OLS estimator of linear regression model is
+
+$\beta = (X'X)^{-1}X'Y$
+
+where
+
+$$\underbrace{\left(\begin{array}{c}
+y_1\\
+y_2\\
+\dots\\
+y_N
+\end{array}\right)}_{Y}
+= \underbrace{\left(\begin{array}{ccccc}
+1 & x_{11} & x_{21} &\dots& x_{k1}\\
+1 & x_{12} & x_{22} &\dots& x_{k2}\\
+\dots& \dots &\dots.& \dots & \dots\\
+1 & x_{1N} & x_{2N} &\dots.& x_{kN}
+\end{array}\right)}_{X}
+\underbrace{\left(\begin{array}{c}
+\beta_0\\
+\beta_1\\
+\beta_2\\
+\dots\\
+\beta_k
+\end{array}\right)}_{\beta}
++
+\underbrace{\left(\begin{array}{c}
+e_1\\
+e_2\\
+\dots\\
+e_N
+\end{array}\right)}_{e}$$
+
+
+
+```{r}
+X <- cbind(1,X1,X2,X3,X4)
+
+beta <- solve(t(X)%*%X)%*%t(X)%*%Y
+```
+
+### Standard error
+
+The formula for standard error of OLS estimator is:
+
+$$s.e.(\beta) = \sqrt{\hat{\sigma}^2(X'X)^{-1}} \\
+\text{where } \hat{\sigma}^2 \text{ is the diagonal elements of } \frac{1}{N}\hat{e}\hat{e}', \text{ and } \hat{e}=Y-X\beta.$$
+
+```{r}
+mod <- lm(Y~X)
+beta.var <- anova(mod)[[3]][2]*solve(t(X)%*%X)
+sqrt(diag(beta.var))
+```
+
+## Assumptions and properties of OLS estimator
+
+  - Assumptions: A1 (Linear in parameters): $Y=X\beta+e$
+
+  - A2 (Zero conditional mean): $E(eX)=0$
+  
+  - A3 (No perfect collinearity): X has rank k.
+  
+  - A4 (Homoskedasticity): $Var(e_iX)=\sigma^2$ and $Cov(e_i,e_j)=0$, thus $Var(eX)=\sigma^2I$
+  
+GAUSS-MARKOV Theorem: Under assumptions A1 - A4, *?? is the Best Linear Unbiased Estimator (BLUE). *
+
+### Limitations of the OLS estimator
+
+The model is misspecified.
+```{r}
+N <- 1000
+X1 <- rnorm(N, 80, 5)
+X2 <- sample(c(13:21), N, replace = TRUE)
+X3 <- sample(c(0,1), N, replace = TRUE)
+X4 <- rnorm(rnorm(N, 0, 10))
+error <- rnorm(N, 0, 5)
+Y <- 50 + 0.85*X1^2 + 1.1*X2 + 5*X3 + error
+
+mydata <- data.frame(Score=Y, STR=X1, Age=X2, Gender=X3, GDP=X4)
+mydata$Gender <- factor(mydata$Gender, levels = c(0,1), labels = c("M", "F"))
+```
+
+```{r}
+res <- lm(Score ~ STR + Age + Gender + GDP, data = mydata, na.action = na.omit)
+summary(res)
+```
+
+The model is misspecified because the true relation between STR(X1) and Score(Y) is nonlinear, but we used linear regression model. Thus the OLS estimators are inconsistent.
+
+The correctly specified model:
+```{r}
+res <- lm(Score ~ I(STR^2) + Age + Gender + GDP, data = mydata, na.action = na.omit)
+summary(res)
+```
+
+> Note: I() changes the class of an object to indicate that it should be treated 'as is'. See also AsIs{base} in R.
+
+### The omitted variable bias
+
+Omitted variable bias is the bias in the OLS estimator that arises when one or more included regressors are correlated with an omitted variable. For omitted variable bias to arise, two things must be true:
+
+  1.  At least one of the included regressors must be correlated with the omitted variable.
+  
+  2.  The omitted variable must be a determinant of the dependent variable, Y.
+
+As an example, consider a linear model of the form
+$$Y=X\beta+Z\delta+e$$
+
+where X is the matrix of regressor we put in the regression, and Z is the matrix of omitted variables. We have derived in class that  
+
+% <![CDATA[
+\begin{align*}
+\hat{\beta}&=(X'X)^{-1}X'Y \\
+&=(X'X)^{-1}X'(X\beta+Z\delta+e) \\
+&=(X'X)^{-1}X'X\beta+(X'X)^{-1}X'Z\delta+(X'X)^{-1}X'e \\
+&=\beta+(X'X)^{-1}X'Z\delta+(X'X)^{-1}X'e \\
+\\
+E(\hat{\beta}|X)&=\beta+\underbrace{(X'X)^{-1}X'E(Z\delta|X)}_{\text{bias}}+(X'X)^{-1}X'\underbrace{E(e|X)}_{=0 (\text{by A2})}
+\end{align*} %]]>
+
+```{r}
+N <- 1000
+X2 <- sample(c(13:21), N, replace = TRUE)
+X3 <- sample(c(0,1), N, replace = TRUE)
+X4 <- rnorm(rnorm(N, 0, 10))
+
+# X1 and X2 are correlated by construction
+X1 <- 0.5*X2 + rnorm(N, 80, 5)
+
+error <- rnorm(N, 0, 5)
+Y <- 50 + 0.85*X1 + 1.1*X2 + 5*X3 + error
+
+mydata <- data.frame(Score=Y, STR=X1, Age=X2, Gender=X3, GDP=X4)
+mydata$Gender <- factor(mydata$Gender, levels = c(0,1), labels = c("M", "F"))
+```
+
+The correct regression model (No omitted variable bias).
+
+```{r}
+res <- lm(Score ~ STR + Age + Gender + GDP, data = mydata, na.action = na.omit)
+summary(res)
+```
+
+In the following regression, we omited Age and gender so the OLS estimator of coefficient of STR is biased.
+
+```{r}
+res <- lm(Score ~ STR + Gender + GDP, data = mydata, na.action = na.omit)
+summary(res)
+```
