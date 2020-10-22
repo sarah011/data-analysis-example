@@ -1,0 +1,117 @@
+---
+title: "Classification"
+author: ""
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,error=F,warnng=F)
+options(repr.plot.width=14, repr.plot.antialias='subpixel',
+        repr.plot.res=218)
+```
+
+# Logistic Regression
+
+Classification using the Default (ISLR package) data. 
+
+Left: Estimated probability of default using linear regression. Some estimated probabilities are negative! The orange ticks indicate the 0/1 values coded for default (No or Yes). 
+
+Right: Predicted probabilities of default using logistic regression. All probabilities lie between 0 and 1.
+
+## The Logistic Model
+
+Assuming there are p predictors $X=(X_1,.,X_p)$, The logistic model is as following
+
+$$p(X)=\frac{e^{\beta_0+\beta_1X_1+\cdots+\beta_pX_p}} {1+e^{\beta_0+\beta_1X_1+\cdots+\beta_p X_p}} \quad (*)$$
+
+where $p(X)= Pr(Y=1|X)$ is the probability of default which is latent. The relation between P(X) and Y is:
+
+% <![CDATA[
+Y = \begin{cases}
+1, \quad p(X) \geq 0.5 \\
+0,  \quad p(X) < 0.5 \\
+\end{cases} %]]>
+
+  We have introduced how to estimate the parameters $\beta_0, \beta_1,.,\beta_p$ using the maximum likelihood method. The likelihood function takes the form of: 
+  
+$$\mathcal{L}(\beta_0, \beta_1,...,\beta_p)=\Pi_{i=1}^N p(X_i)^{y_i}(1-p(X_i))^{1-y_i}$$
+
+The log-likelihood function is
+
+$$\mathcal{l}(\beta_0, \beta_1,...,\beta_p)=\sum_{i=1}^N [\log y_ip(X_i) + (1-y_i)\log(1-p(X_i))]$$
+
+  Plugging equation (*) in and take partial derivative w.r.t $\beta s$ and then set the equations to zero. You can get the estimators $\hat{\beta}_0, \hat{\beta}_1,.,\hat{\beta}_p$. Note that there is no closed form solution for $\hat{\beta}_0, \hat{\beta}_1,.,\hat{\beta}_p$. In practice, they are solved iteratively which means the optimization is local!
+  
+## Implement Logistic regression in R
+
+```{r}
+library("ISLR")
+data("Smarket")
+
+names(Smarket)
+```
+
+This data set consists of percentage returns for the S&P 500 stock index over 1,250 days, from the beginning of 2001 until the end of 2005. For each date, we have recorded the percentage returns for each of the five previous trading days, Lag1 through Lag5. We have also recorded Volume (the number of shares traded on the previous day, in billions), Today (the percentage return on the date in question) and Direction (whether the market was Up or Down on this date).
+
+```{r}
+cor(Smarket[,-9])
+```
+
+From the result, the only substantial correlation is between Year and Volume.
+
+Next, we will fit a logistic regression model in order to predict Direction using Lag1 through Lag5 and Volume. The glm() function fits generalized linear models, a class of models that includes logistic regression. The syntax generalized of the glm() function is similar to that of **lm()**, except that we must pass in linear model the argument **family = binomial** in order to tell R to run a logistic regression rather than some other type of generalized linear model.
+
+```{r}
+glm.fit <- glm(Direction ~ . - Year - Today, data = Smarket, family = "binomial")
+summary(glm.fit)
+```
+
+The **predict()** function can be used to predict the probability that the market will go up, given values of the predictors. The **type = "response"** option tells R to output probabilities of the form $P*(Y=1|X)$, as opposed to other information such as the logit. If no data set is supplied to the *predict()* function, then the probabilities are computed for the training data that was used to fit the logistic regression model.
+
+```{r}
+Smarket$glm.probs <- predict(glm.fit, type = "response")
+Smarket$glm.probs[1:10]
+```
+
+In order to make a prediction as to whether the market will go up or down on a particular day, we must convert these predicted probabilities into class labels, Up or Down. The following two commands create a vector of class predictions based on whether the predicted probability of a market increase is greater than or less than 0.5.
+
+```{r}
+Smarket$Direc_Pred <- "Down"
+Smarket$Direc_Pred[Smarket$glm.probs >.5] <- "Up"
+```
+
+The first command creates a new column of glm.probs of 1,250 Down elements. The second line transforms to Up all of the elements for which the predicted probability of a market increase exceeds 0.5.
+
+Given these predictions, the **table()** function can be used to produce a confusion matrix in order to determine how many observations were correctly or incorrectly classified.
+
+```{r}
+table(Smarket$Direction, Smarket$Direc_Pred)
+mean(Smarket$Direc_Pred == Smarket$Direction)
+```
+
+The diagonal elements of the confusion matrix indicate correct predictions, while the off-diagonals represent incorrect predictions. The **mean()** function can be used to compute the fraction of days for which the prediction was correct. In this case, logistic regression correctly predicted the movement of the market 52.2% of the time.
+
+Note: the training error rate is often overly optimistic-it tends to underestimate the test error rate because we trained and tested the model on the same set of 1,250 observations. To solve this problem, we can do the following,
+
+```{r}
+data("Smarket")
+train <- (Smarket$Year < 2005)
+glm.fit <- glm(Direction ~ . - Year - Today,
+                  data = Smarket, family = "binomial", subset = train)
+summary(glm.fit)
+
+Smarket.2005 <- Smarket[!train,]
+glm.probs <- predict(glm.fit, Smarket.2005 , type = "response")
+
+glm.pred <- rep("Down", 252)
+glm.pred[glm.probs > .5] <- "Up"
+
+Direction.2005 <- Smarket$Direction[!train]
+table(glm.pred, Direction.2005)
+
+mean(glm.pred == Direction.2005)
+```

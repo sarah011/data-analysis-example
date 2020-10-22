@@ -1,0 +1,148 @@
+---
+title: "Clustering"
+author: ""
+date: '`r Sys.Date()`'
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,error=F,warnng=F)
+options(repr.plot.width=14, repr.plot.antialias='subpixel',
+        repr.plot.res=218)
+```
+
+
+# K-Means Clustering
+K-means clustering is a simple and elegant approach for partitioning a data set into K distinct, non-overlapping clusters. To perform K-means clustering, we must first specify the desired number of clusters K; then the K-means algorithm will assign each observation to exactly one of the K clusters.
+
+The K-means clustering is defined by solving the following optimization problem
+
+$$\min_{C_1,\dots,C_K}\left\{\sum^K_{k=1}\frac{1}{|C_k|}\sum_{i,i'\in C_k}\sum^p_{j=1}(x_{ij}-x_{i'j})^2\right\}$$
+
+where	$C_k$	denotes the number of observations in the kth cluster. This optimization problem is solved by following algorithm
+
+Algorithm: K-Means Clustering
+
+  1.  Randomly assign a number, from 1 to K, to each of the observations. These serve as initial cluster assignments for the observations.
+  
+  2.  Iterate until the cluster assignments stop changing: 
+  
+    (a) For each of the K clusters, compute the cluster centroid. The kth cluster centroid is the vector of the p feature means for the observations in the kth cluster. 
+    
+  (b) Assign each observation to the cluster whose centroid is closest (where closest is defined using Euclidean distance).
+
+Note: Because the K-means algorithm finds a local rather than a global optimum, the results obtained will depend on the initial (random) cluster assignment of each observation in Step 1. For this reason, it is important to run the algorithm multiple times from different random initial configurations. Then one selects the best solution.
+
+The function kmeans() performs K-means clustering in R. We begin with a simple simulated example in which there truly are two clusters in the data: the first 25 observations have a mean shift relative to the next 25 observations.
+
+```{r}
+set.seed(2312)
+x <- matrix(rnorm(50*2), ncol = 2)
+x[1:25, 1]= x[1:25, 1] + 3
+x[1:25, 2]= x[1:25, 2] - 4
+plot(x, main ="K-Means Clustering Results with K=2",
+                           xlab = "", ylab = "", pch = 20, cex = 2)
+```
+
+We now perform K-means clustering with K = 2.
+
+```{r}
+km.out <- kmeans(x, 2, nstart = 20)
+km.out
+```
+
+To run the kmeans() function in R with multiple initial cluster assignments, we use the nstart argument. If a value of nstart greater than one is used, then K-means clustering will be performed using multiple random assignments in Step 1, and the kmeans() function will report only the best results.
+
+We can plot the data, with each observation colored according to its cluster assignment.
+
+```{r}
+plot(x, col = km.out$cluster,
+        main ="K-Means Clustering Results with K=2",
+                  xlab = "", ylab = "", pch = 20, cex = 2)
+```
+
+# Hierarchical Clustering
+
+Hierarchical clustering has an added advantage over K-means clustering in that it results in an attractive tree-based representation of the observations, called a dendrogram.
+
+Below is an example of a dendrogram:
+
+Algorithm: Hierarchical Clustering
+
+  1.  Begin with n observations and a measure (such as Euclidean distance) of all the $\left(\begin{array}{c}n\\2\end{array}\right)=n(n-1)/2$ pairwise dissimilarities. Treat each observation as its own cluster.
+
+  2.  For $i=n,n-1,\dots,2$:
+
+  (a) Examine all pairwise inter-cluster dissimilarities among the i clusters and identify the pair of clusters that are least dissimilar (that is, most similar). Fuse these two clusters. The dissimilarity between these two clusters indicates the height in the dendrogram at which the fusion should be placed.
+
+  (b) Compute the new pairwise inter-cluster dissimilarities among the i-1 remaining clusters.
+
+
+This algorithm seems simple enough, but one issue has not been addressed. How did we determine that the cluster {5, 7} should be fused with the cluster {8}? We have a concept of the dissimilarity between pairs of observations, but how do we define the dissimilarity between two clusters if one or both of the clusters contains multiple observations? The concept of dissimilarity between a pair of observations needs to be extended to a pair of groups of observations. This extension is achieved by developing the notion of linkage, which defines the dissimilarity between two groups of observations.
+
+The four most common types of linkage - complete, average, single, and centroid - are briefly described below:
+
+  - Complete: Maximal intercluster dissimilarity. Compute all pairwise dissimilarities between the observations in cluster A and the observations in cluster B, and record the largest of these dissimilarities.
+
+  - Single: Minimal intercluster dissimilarity. Compute all pairwise dissimilarities between the observations in cluster A and the observations in cluster B, and record the smallest of these dissimilarities. Single linkage can result in extended, trailing clusters in which single observations are fused one-at-a-time.
+
+  - Average: Mean intercluster dissimilarity. Compute all pairwise dissimilarities between the observations in cluster A and the observations in cluster B, and record the average of these dissimilarities.
+  
+  - Centroid: Dissimilarity between the centroid for cluster A (a mean vector of length p) and the centroid for cluster B. Centroid linkage can result in undesirable inversions.
+  
+Average and complete linkage are generally preferred over single linkage, as they tend to yield more balanced dendrograms.
+
+The **hclust()** function implements hierarchical clustering in R. We begin by clustering observations using complete linkage. The **dist()** function is used to compute the 50*50 inter-observation Euclidean distance matrix.
+
+```{r}
+set.seed(2312)
+x <- matrix(rnorm(50*2), ncol = 2)
+x[1:25, 1]= x[1:25, 1] + 3
+x[1:25, 2]= x[1:25, 2] - 4
+plot(x, main ="Hierarchical Clustering Results with K=2", xlab = "", ylab = "", pch = 20, cex = 2)
+```
+
+```{r}
+hc.complete <- hclust(dist(x), method ="complete")
+hc.average <- hclust(dist(x), method ="average")
+hc.single <- hclust(dist(x), method ="single")
+```
+
+We can now plot the dendrograms obtained using the usual plot() function. The numbers at the bottom of the plot identify each observation.
+
+```{r}
+par(mfrow = c(1 ,3))
+plot(hc.complete, main =" Complete Linkage ", xlab = "", sub = "", cex =0.9)
+plot(hc.average, main =" Average Linkage ", xlab = "", sub = "", cex =.9)
+plot(hc.single, main =" Single Linkage ", xlab = "", sub = "", cex =.9)
+```
+
+To determine the cluster labels for each observation associated with a given cut of the dendrogram, we can use the **cutree()** function:
+
+```{r}
+group.complete <- cutree(hc.complete, 2)
+group.average <- cutree(hc.average, 2)
+group.single <- cutree(hc.single, 2)
+
+par(mfrow = c(3 ,1))
+plot(x, col = group.complete,
+        main ="Hierarchical Clustering Results with K=2 (complete)",
+           xlab = "", ylab = "", pch = 20, cex = 2)
+plot(x, col = group.average,
+        main ="Hierarchical Clustering Results with K=2 (average)",
+           xlab = "", ylab = "", pch = 20, cex = 2)
+plot(x, col = group.single,
+        main ="Hierarchical Clustering Results with K=2 (single)",
+           xlab = "", ylab = "", pch = 20, cex = 2)
+```
+
+For this data, complete and average linkage generally separate the observations into their correct groups. However, single linkage identifies one point as belonging to its own cluster.
+
+Considerations in Clustering
+
+  - Sensitive to outliers: Both K-means and hierarchical clustering will assign each observation to a cluster. However, sometimes this might not be appropriate. For instance, suppose that most of the observations truly belong to a small number of (unknown) subgroups, and a small subset of the observations are quite different from each other and from all other observations. Then since Kmeans and hierarchical clustering force every observation into a cluster, the clusters found may be heavily distorted due to the presence of outliers that do not belong to any cluster.
+
+  - Not robust: clustering methods generally are not very robust to perturbations to the data. For instance, suppose that we cluster n observations, and then cluster the observations again after removing a subset of the n observations at random. One would hope that the two sets of clusters obtained would be quite similar, but often this is not the case!
